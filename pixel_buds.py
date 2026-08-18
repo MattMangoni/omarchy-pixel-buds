@@ -1,12 +1,14 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
+import fcntl
 import json
 import os
 import re
 import shutil
 import subprocess
 import sys
+from contextlib import contextmanager
 from pathlib import Path
 
 
@@ -37,6 +39,15 @@ def pbpctrl() -> str | None:
     return str(cargo) if cargo.is_file() and os.access(cargo, os.X_OK) else shutil.which("pbpctrl")
 
 
+@contextmanager
+def device_lock():
+    runtime = Path(os.environ.get("XDG_RUNTIME_DIR", f"/tmp/omarchy-pixel-buds-{os.getuid()}"))
+    runtime.mkdir(mode=0o700, parents=True, exist_ok=True)
+    with (runtime / "omarchy-pixel-buds.lock").open("w") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        yield
+
+
 def battery(output: str) -> dict[str, int | None]:
     def level(label: str) -> int | None:
         match = re.search(rf"^{label}:\s+(\d+)%", output, re.MULTILINE)
@@ -64,8 +75,9 @@ def status() -> dict:
     if not connected or not binary:
         return state
 
-    battery_code, battery_output = run([binary, "--device", address, "show", "battery"])
-    anc_code, anc_output = run([binary, "--device", address, "get", "anc"])
+    with device_lock():
+        battery_code, battery_output = run([binary, "--device", address, "show", "battery"])
+        anc_code, anc_output = run([binary, "--device", address, "get", "anc"])
     if battery_code == 0:
         state["battery"] = battery(battery_output)
     if anc_code == 0 and anc_output in {"off", "active", "aware", "adaptive"}:
@@ -91,7 +103,8 @@ def act(action: str) -> int:
     modes = {"anc-off": "off", "anc-active": "active", "anc-aware": "aware", "anc-adaptive": "adaptive"}
     if action not in modes or not (binary := pbpctrl()):
         return 2
-    return run([binary, "--device", address, "set", "anc", modes[action]])[0]
+    with device_lock():
+        return run([binary, "--device", address, "set", "anc", modes[action]])[0]
 
 
 def main() -> int:
