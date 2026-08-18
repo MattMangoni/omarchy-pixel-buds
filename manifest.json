@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "id": "matteo.pixel-buds",
+  "name": "Pixel Buds",
+  "version": "0.1.0",
+  "author": "Matteo Mangoni",
+  "license": "MIT",
+  "description": "Connect and control Google Pixel Buds from the Omarchy bar",
+  "kinds": ["bar-widget"],
+  "entryPoints": {
+    "barWidget": "Panel.qml"
+  },
+  "barWidget": {
+    "displayName": "Pixel Buds",
+    "description": "Connection, battery, and noise control for Pixel Buds",
+    "category": "System",
+    "defaultSection": "right",
+    "allowMultiple": false
+  }
+}
