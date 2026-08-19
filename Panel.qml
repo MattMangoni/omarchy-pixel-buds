@@ -192,7 +192,7 @@ Panel {
               required property var modelData
               text: modelData.label
               selected: root.state.anc === modelData.value
-              enabled: root.state.pbpctrl && root.state.connected && root.state.anc !== null && !root.busy
+              enabled: root.state.pbpctrl && root.state.connected && !root.busy
               foreground: root.foreground
               fontFamily: root.fontFamily
               focusable: true
