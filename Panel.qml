@@ -7,8 +7,8 @@ import qs.Ui
 
 Panel {
   id: root
-  moduleName: "matteo.pixel-buds"
-  ipcTarget: "matteo.pixel-buds"
+  moduleName: "mttmng.pixel-buds"
+  ipcTarget: "mttmng.pixel-buds"
 
   readonly property string helper: Qt.resolvedUrl("pixel_buds.py").toString().replace("file://", "")
   readonly property color foreground: bar ? bar.foreground : Color.foreground
