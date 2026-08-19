@@ -5,9 +5,10 @@ An Omarchy bar panel for Google Pixel Buds, backed by
 
 ## Features
 
-- Connect and disconnect paired Pixel Buds
+- Appears automatically while paired Pixel Buds are connected
 - Left, right, and case battery levels
 - Off, ANC, transparency, and adaptive noise control
+- Five-band equalizer
 
 ## Install
 

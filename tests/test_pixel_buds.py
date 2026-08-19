@@ -24,5 +24,9 @@ class PixelBudsTest(unittest.TestCase):
              mock.patch.object(pixel_buds.os, "access", return_value=True):
             self.assertEqual(pixel_buds.pbpctrl(), "/home/test/.cargo/bin/pbpctrl")
 
+    def test_validates_equalizer_bands(self):
+        self.assertEqual(pixel_buds.equalizer(["-6", "-1.5", "0", "2", "6"]), [-6, -1.5, 0, 2, 6])
+        self.assertIsNone(pixel_buds.equalizer([0, 0, 0, 0, 7]))
+
 if __name__ == "__main__":
     unittest.main()

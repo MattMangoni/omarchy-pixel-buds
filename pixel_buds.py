@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import fcntl
 import json
+import math
 import os
 import re
 import shutil
@@ -56,12 +57,22 @@ def battery(output: str) -> dict[str, int | None]:
     return {"left": level("left bud"), "right": level("right bud"), "case": level("case")}
 
 
+def equalizer(values: object) -> list[float] | None:
+    if not isinstance(values, list) or len(values) != 5:
+        return None
+    try:
+        bands = [float(value) for value in values]
+    except (TypeError, ValueError):
+        return None
+    return bands if all(math.isfinite(value) and -6 <= value <= 6 for value in bands) else None
+
+
 def status() -> dict:
     device = buds()
     if not device:
         return {
             "paired": False, "connected": False, "name": "Pixel Buds",
-            "pbpctrl": pbpctrl() is not None, "battery": {}, "anc": None,
+            "pbpctrl": pbpctrl() is not None, "battery": {}, "anc": None, "eq": None,
         }
 
     address, name = device
@@ -70,7 +81,7 @@ def status() -> dict:
     binary = pbpctrl()
     state = {
         "paired": True, "connected": connected, "name": name,
-        "pbpctrl": binary is not None, "battery": {}, "anc": None,
+        "pbpctrl": binary is not None, "battery": {}, "anc": None, "eq": None,
     }
     if not connected or not binary:
         return state
@@ -78,14 +89,20 @@ def status() -> dict:
     with device_lock():
         battery_code, battery_output = run([binary, "--device", address, "show", "battery"])
         anc_code, anc_output = run([binary, "--device", address, "get", "anc"])
+        eq_code, eq_output = run([binary, "--device", address, "get", "eq"])
     if battery_code == 0:
         state["battery"] = battery(battery_output)
     if anc_code == 0 and anc_output in {"off", "active", "aware", "adaptive"}:
         state["anc"] = anc_output
+    if eq_code == 0:
+        try:
+            state["eq"] = equalizer(json.loads(eq_output))
+        except json.JSONDecodeError:
+            pass
     return state
 
 
-def act(action: str) -> int:
+def act(action: str, args: list[str]) -> int:
     if action == "install-pbpctrl":
         try:
             subprocess.Popen(["omarchy", "launch", "terminal", "yay", "-S", "pbpctrl-git"])
@@ -97,21 +114,22 @@ def act(action: str) -> int:
     if not device:
         return 1
     address, _ = device
-    if action in {"connect", "disconnect"}:
-        return run(["bluetoothctl", action, address])[0]
-
     modes = {"anc-off": "off", "anc-active": "active", "anc-aware": "aware", "anc-adaptive": "adaptive"}
-    if action not in modes or not (binary := pbpctrl()):
+    if not (binary := pbpctrl()):
         return 2
     with device_lock():
-        return run([binary, "--device", address, "set", "anc", modes[action]])[0]
+        if action in modes:
+            return run([binary, "--device", address, "set", "anc", modes[action]])[0]
+        if action == "set-eq" and (bands := equalizer(args)) is not None:
+            return run([binary, "--device", address, "set", "eq", *map(str, bands)])[0]
+    return 2
 
 
 def main() -> int:
     if len(sys.argv) == 1 or sys.argv[1] == "status":
         print(json.dumps(status()))
         return 0
-    return act(sys.argv[1])
+    return act(sys.argv[1], sys.argv[2:])
 
 
 if __name__ == "__main__":

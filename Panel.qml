@@ -1,5 +1,6 @@
 import QtQuick
 import Quickshell
+import Quickshell.Bluetooth
 import Quickshell.Io
 import qs.Commons
 import qs.Ui
@@ -12,9 +13,19 @@ Panel {
   readonly property string helper: Qt.resolvedUrl("pixel_buds.py").toString().replace("file://", "")
   readonly property color foreground: bar ? bar.foreground : Color.foreground
   readonly property string fontFamily: bar ? bar.fontFamily : Style.font.family
-  property var state: ({ paired: false, connected: false, name: "Pixel Buds", pbpctrl: false, battery: {}, anc: null })
+  readonly property var devices: Bluetooth.devices ? Bluetooth.devices.values : []
+  readonly property bool budsConnected: {
+    for (var i = 0; i < devices.length; i++) {
+      var device = devices[i]
+      var name = String(device.deviceName || device.name || "").toLowerCase()
+      if (device.connected && name.indexOf("buds") !== -1) return true
+    }
+    return false
+  }
+  property var state: ({ paired: false, connected: false, name: "Pixel Buds", pbpctrl: false, battery: {}, anc: null, eq: null })
   property bool busy: false
 
+  visible: budsConnected
   implicitWidth: button.implicitWidth
   implicitHeight: button.implicitHeight
 
@@ -22,14 +33,26 @@ Panel {
     if (!statusProcess.running) statusProcess.running = true
   }
 
-  function act(name) {
+  function act(name, args) {
     if (actionProcess.running) return
     busy = true
-    actionProcess.command = [helper, name]
+    actionProcess.command = [helper, name].concat(args || [])
     actionProcess.running = true
   }
 
+  function setEq(index, value) {
+    if (!state.eq || state.eq.length !== 5) return
+    var values = state.eq.slice()
+    values[index] = Math.round(value * 2) / 2
+    state = Object.assign({}, state, { eq: values })
+    act("set-eq", values.map(String))
+  }
+
   onOpenedChanged: if (opened) refresh()
+  onBudsConnectedChanged: {
+    if (budsConnected) refresh()
+    else close()
+  }
 
   Process {
     id: statusProcess
@@ -68,7 +91,7 @@ Panel {
     id: button
     anchors.fill: parent
     bar: root.bar
-    text: "󰋋"
+    text: "󱡒"
     active: root.state.connected
     tooltipText: root.state.name + (root.state.connected ? " connected" : " disconnected")
     onPressed: root.toggle()
@@ -94,41 +117,17 @@ Panel {
         width: parent.width
         spacing: Style.space(12)
 
-        Row {
+        Column {
           width: parent.width
-          spacing: Style.space(10)
-
-          Column {
-            width: parent.width - connection.width - parent.spacing
-            spacing: Style.space(2)
-            Text {
-              width: parent.width
-              text: root.state.name
-              color: root.foreground
-              elide: Text.ElideRight
-              font.family: root.fontFamily
-              font.pixelSize: Style.font.title
-              font.bold: true
-            }
-            Text {
-              text: !root.state.paired ? "NOT PAIRED" : root.state.connected ? "CONNECTED" : "DISCONNECTED"
-              color: Qt.darker(root.foreground, 1.4)
-              font.family: root.fontFamily
-              font.pixelSize: Style.font.caption
-              font.bold: true
-              font.letterSpacing: 1.2
-            }
-          }
-
-          Button {
-            id: connection
-            text: root.state.connected ? "Disconnect" : "Connect"
-            enabled: root.state.paired && !root.busy
-            foreground: root.foreground
-            fontFamily: root.fontFamily
-            focusable: true
-            bordered: true
-            onClicked: root.act(root.state.connected ? "disconnect" : "connect")
+          spacing: Style.space(2)
+          Text {
+            width: parent.width
+            text: root.state.name
+            color: root.foreground
+            elide: Text.ElideRight
+            font.family: root.fontFamily
+            font.pixelSize: Style.font.title
+            font.bold: true
           }
         }
 
@@ -165,14 +164,6 @@ Panel {
           }
         }
 
-        Text {
-          visible: !root.state.connected
-          text: "Connect the earbuds to read battery and noise control"
-          color: Qt.darker(root.foreground, 1.4)
-          font.family: root.fontFamily
-          font.pixelSize: Style.font.caption
-        }
-
         Button {
           visible: !root.state.pbpctrl
           text: "Install pbpctrl-git"
@@ -207,6 +198,60 @@ Panel {
               focusable: true
               bordered: true
               onClicked: root.act("anc-" + modelData.value)
+            }
+          }
+        }
+
+        PanelSeparator { foreground: root.foreground }
+
+        PanelSectionHeader { text: "EQUALIZER"; foreground: root.foreground; fontFamily: root.fontFamily }
+
+        Repeater {
+          model: ["Low bass", "Bass", "Mid", "Treble", "Upper treble"]
+          Item {
+            required property int index
+            required property string modelData
+            width: content.width
+            implicitHeight: Style.space(30)
+
+            Text {
+              width: Style.space(82)
+              anchors.left: parent.left
+              anchors.verticalCenter: parent.verticalCenter
+              text: modelData
+              color: root.foreground
+              font.family: root.fontFamily
+              font.pixelSize: Style.font.caption
+            }
+
+            PanelSlider {
+              id: eqSlider
+              anchors.left: parent.left
+              anchors.leftMargin: Style.space(90)
+              anchors.right: eqValue.left
+              anchors.rightMargin: Style.space(8)
+              anchors.verticalCenter: parent.verticalCenter
+              bar: root.bar
+              minimum: -6
+              maximum: 6
+              step: 0.5
+              value: root.state.eq ? root.state.eq[index] : 0
+              enabled: root.state.eq !== null && !root.busy
+              opacity: enabled ? 1 : 0.5
+              tickCount: 13
+              onReleased: function(value) { root.setEq(index, value) }
+            }
+
+            Text {
+              id: eqValue
+              width: Style.space(32)
+              anchors.right: parent.right
+              anchors.verticalCenter: parent.verticalCenter
+              horizontalAlignment: Text.AlignRight
+              text: Math.round((eqSlider.dragging ? eqSlider.liveValue : eqSlider.value) * 2) / 2 + " dB"
+              color: root.foreground
+              font.family: root.fontFamily
+              font.pixelSize: Style.font.caption
             }
           }
         }
