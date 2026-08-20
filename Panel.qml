@@ -92,7 +92,6 @@ Panel {
     anchors.fill: parent
     bar: root.bar
     text: "󱡒"
-    active: root.state.connected
     tooltipText: root.state.name + (root.state.connected ? " connected" : " disconnected")
     onPressed: root.toggle()
   }
